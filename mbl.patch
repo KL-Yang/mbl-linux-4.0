@@ -1,11 +1,11 @@
-From 173d2f47f7b7e862d5ebe22cc909d8eea5effe9d Mon Sep 17 00:00:00 2001
-From: root <root@Mac.WeTube>
-Date: Thu, 16 Apr 2015 01:44:51 +0800
-Subject: [PATCH] sata initially working now.
+From 694e00fd074ed34406faaafaed69a307e2d9e60b Mon Sep 17 00:00:00 2001
+From: YangKunlun <yangkunlun@gmail.com>
+Date: Mon, 11 May 2015 19:49:08 +0800
+Subject: [PATCH] sata driver with pmp port from 2.6.32
 
-Just a little bit slow, dd shows write above 20MB/s
-and read above 30MB/s using 4KB page size, about half of the old kernel.
-When use 16KB page size, it is as fast as old ones!
+dd shows write above 20MB/s and read above 30MB/s using 4KB page size,
+speed is about 80MB/s use 16KB page size, it is almost as fast as
+original firmware.
 ---
  arch/powerpc/boot/dts/apollo3g.dts               |  453 ++++
  arch/powerpc/configs/44x/apollo_3G_nas_defconfig |   66 +
@@ -585,7 +585,7 @@ index 573c3d2..c4f2643 100644
  	"ibm,ebony",
  	"amcc,eiger",
 diff --git a/drivers/ata/Kconfig b/drivers/ata/Kconfig
-index 5f60155..91d3321 100644
+index 5f60155..4961eb6 100644
 --- a/drivers/ata/Kconfig
 +++ b/drivers/ata/Kconfig
 @@ -276,9 +276,19 @@ config SATA_DWC
@@ -593,14 +593,14 @@ index 5f60155..91d3321 100644
  	  If unsure, say N.
  
 +config SATA_DWC_PMP
-+    tristate "DesignWare Cores SATA with PMP support"
-+    depends on 460EX || APM821xx
-+    help
-+        This option enables support for the Synopsys DesignWare Cores SATA
-+        controller.
-+        It can be found on the WD MyBook Live solo or dual driver version.
++	tristate "DesignWare Cores SATA with PMP support"
++	depends on 460EX || APM821xx
++	help
++	  This option enables support for the Synopsys DesignWare Cores SATA
++	  controller.
++	  It can be found on the WD MyBook Live solo or dual driver version.
 +
-+        If unsure, say N.
++	  If unsure, say N.
 +
  config SATA_DWC_DEBUG
  	bool "Debugging driver version"
