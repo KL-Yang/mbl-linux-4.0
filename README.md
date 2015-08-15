@@ -14,5 +14,9 @@ The package must be unpaced to the first partition (ext2) of MBL, and is tested 
 Find the DHCP after boot, then ssh login as root and password is password.
 
 Note:
+
 The rootfs will NOT work on stock filesystem! The stock kernel use 64K page size (filesystem is also 64K page), 
-the new kernel use 16K page size, and only tested with filesystem of 4K page size (default on x86/64).
+My kernel use 16K page size (4K performance is bad), and only tested with filesystem of 4K page size (default on x86/64).
+If none of them make any sense to you, just disassemble MBL to get the harddrive and connect to your PC's sata port (important),
+repartition the drive, and unpack rootfs to the first partition (must format as ext2).
+Then put harddrive back into MBL, it should boot up as a Debian Jessie headless server.
