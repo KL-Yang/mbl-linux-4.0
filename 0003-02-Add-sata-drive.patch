@@ -1,0 +1,50 @@
+From 11e6e2819c27da549c227fcfd8a01761bcfae9b1 Mon Sep 17 00:00:00 2001
+From: YangKunlun <yangkunlun@gmail.com>
+Date: Fri, 8 Apr 2016 15:23:09 +0000
+Subject: [PATCH 3/4] 02-Add sata drive
+
+---
+ drivers/ata/Kconfig  | 12 +++++++++++-
+ drivers/ata/Makefile |  1 +
+ 2 files changed, 12 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/ata/Kconfig b/drivers/ata/Kconfig
+index 6aaa3f8..14c6f36 100644
+--- a/drivers/ata/Kconfig
++++ b/drivers/ata/Kconfig
+@@ -304,9 +304,19 @@ config SATA_DWC
+ 
+ 	  If unsure, say N.
+ 
++config SATA_DWC_PMP
++	tristate "DesignWare Cores SATA with PMP support"
++	depends on 460EX || APM821xx
++	help
++	  This option enables support for the Synopsys DesignWare Cores SATA
++	  controller.
++	  It can be found on the WD MyBook Live solo or dual driver version.
++
++	  If unsure, say N.
++
+ config SATA_DWC_DEBUG
+ 	bool "Debugging driver version"
+-	depends on SATA_DWC
++	depends on SATA_DWC || SATA_DWC_PMP
+ 	help
+ 	  This option enables debugging output in the driver.
+ 
+diff --git a/drivers/ata/Makefile b/drivers/ata/Makefile
+index af45eff..b9996e6 100644
+--- a/drivers/ata/Makefile
++++ b/drivers/ata/Makefile
+@@ -9,6 +9,7 @@ obj-$(CONFIG_SATA_FSL)		+= sata_fsl.o
+ obj-$(CONFIG_SATA_INIC162X)	+= sata_inic162x.o
+ obj-$(CONFIG_SATA_SIL24)	+= sata_sil24.o
+ obj-$(CONFIG_SATA_DWC)		+= sata_dwc_460ex.o
++obj-$(CONFIG_SATA_DWC_PMP)	+= sata_dwc_pmp.o
+ obj-$(CONFIG_SATA_HIGHBANK)	+= sata_highbank.o libahci.o
+ obj-$(CONFIG_AHCI_BRCMSTB)	+= ahci_brcmstb.o libahci.o libahci_platform.o
+ obj-$(CONFIG_AHCI_CEVA)		+= ahci_ceva.o libahci.o libahci_platform.o
+-- 
+2.1.4
+

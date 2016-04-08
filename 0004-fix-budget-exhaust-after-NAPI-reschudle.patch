@@ -1,0 +1,59 @@
+From 07aa0e2792225afb5a262e6eeac86e1abae50f53 Mon Sep 17 00:00:00 2001
+From: YangKunlun <yangkunlun@gmail.com>
+Date: Sat, 9 Apr 2016 03:45:31 +0800
+Subject: [PATCH 4/4] fix budget exhaust after NAPI reschudle
+
+---
+ drivers/net/ethernet/ibm/emac/mal.c | 36 ++++++++++++++++++------------------
+ 1 file changed, 18 insertions(+), 18 deletions(-)
+
+diff --git a/drivers/net/ethernet/ibm/emac/mal.c b/drivers/net/ethernet/ibm/emac/mal.c
+index fdb5cdb..3fe7778 100644
+--- a/drivers/net/ethernet/ibm/emac/mal.c
++++ b/drivers/net/ethernet/ibm/emac/mal.c
+@@ -437,24 +437,24 @@ static int mal_poll(struct napi_struct *napi, int budget)
+ 	spin_unlock_irqrestore(&mal->lock, flags);
+ 
+ 	/* Check for "rotting" packet(s) */
+-	list_for_each(l, &mal->poll_list) {
+-		struct mal_commac *mc =
+-			list_entry(l, struct mal_commac, poll_list);
+-		if (unlikely(test_bit(MAL_COMMAC_POLL_DISABLED, &mc->flags)))
+-			continue;
+-		if (unlikely(mc->ops->peek_rx(mc->dev) ||
+-			     test_bit(MAL_COMMAC_RX_STOPPED, &mc->flags))) {
+-			MAL_DBG2(mal, "rotting packet" NL);
+-			if (!napi_reschedule(napi))
+-				goto more_work;
+-
+-			spin_lock_irqsave(&mal->lock, flags);
+-			mal_disable_eob_irq(mal);
+-			spin_unlock_irqrestore(&mal->lock, flags);
+-			goto again;
+-		}
+-		mc->ops->poll_tx(mc->dev);
+-	}
++    //list_for_each(l, &mal->poll_list) {
++	//	struct mal_commac *mc =
++	//		list_entry(l, struct mal_commac, poll_list);
++	//	if (unlikely(test_bit(MAL_COMMAC_POLL_DISABLED, &mc->flags)))
++	//		continue;
++	//	if (unlikely(mc->ops->peek_rx(mc->dev) ||
++	//		     test_bit(MAL_COMMAC_RX_STOPPED, &mc->flags))) {
++	//		MAL_DBG2(mal, "rotting packet" NL);
++	//		if (!napi_reschedule(napi))
++	//			goto more_work;
++    //
++	//		spin_lock_irqsave(&mal->lock, flags);
++	//		mal_disable_eob_irq(mal);
++	//		spin_unlock_irqrestore(&mal->lock, flags);
++	//		goto again;
++	//	}
++	//	mc->ops->poll_tx(mc->dev);
++	//}
+ 
+  more_work:
+ 	MAL_DBG2(mal, "poll() %d <- %d" NL, budget, received);
+-- 
+2.1.4
+

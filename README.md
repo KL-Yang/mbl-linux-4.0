@@ -1,4 +1,6 @@
 # mbl-linux-4.0
+
+(in transition to update to 4.4.y kernel)
 WD My Book Live Kernel 4.0 (now applies on 4.1.y) patches
 
 This patch set support WD My Book Live (not Duo), mostly are sata dirve and configuration ported from stock firmware 2.6.32 kernel.
