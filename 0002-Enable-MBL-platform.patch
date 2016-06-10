@@ -1,7 +1,7 @@
-From e35b5ee4d9cf4c1da7515ab97c7c523a4b4f7a5c Mon Sep 17 00:00:00 2001
+From 6e2fa387876f0fce220c255c217d8c65f9c82a4a Mon Sep 17 00:00:00 2001
 From: YangKunlun <yangkunlun@gmail.com>
-Date: Fri, 8 Apr 2016 15:19:08 +0000
-Subject: [PATCH 2/4] 01-Add basic board support
+Date: Fri, 10 Jun 2016 21:33:44 +0800
+Subject: [PATCH 2/3] Enable MBL platform
 
 ---
  arch/powerpc/platforms/44x/Kconfig         | 11 +++++++++++

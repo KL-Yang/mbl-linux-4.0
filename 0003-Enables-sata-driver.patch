@@ -1,7 +1,7 @@
-From 11e6e2819c27da549c227fcfd8a01761bcfae9b1 Mon Sep 17 00:00:00 2001
+From b41c2e5bf2f9fbb1b2a022daf8196d786cf48f14 Mon Sep 17 00:00:00 2001
 From: YangKunlun <yangkunlun@gmail.com>
-Date: Fri, 8 Apr 2016 15:23:09 +0000
-Subject: [PATCH 3/4] 02-Add sata drive
+Date: Fri, 10 Jun 2016 21:34:19 +0800
+Subject: [PATCH 3/3] Enables sata driver
 
 ---
  drivers/ata/Kconfig  | 12 +++++++++++-
@@ -9,10 +9,10 @@ Subject: [PATCH 3/4] 02-Add sata drive
  2 files changed, 12 insertions(+), 1 deletion(-)
 
 diff --git a/drivers/ata/Kconfig b/drivers/ata/Kconfig
-index 6aaa3f8..14c6f36 100644
+index 9dca4b9..e9da9cc 100644
 --- a/drivers/ata/Kconfig
 +++ b/drivers/ata/Kconfig
-@@ -304,9 +304,19 @@ config SATA_DWC
+@@ -277,9 +277,19 @@ config SATA_DWC
  
  	  If unsure, say N.
  
@@ -34,7 +34,7 @@ index 6aaa3f8..14c6f36 100644
  	  This option enables debugging output in the driver.
  
 diff --git a/drivers/ata/Makefile b/drivers/ata/Makefile
-index af45eff..b9996e6 100644
+index 40f7865..ee86a9d 100644
 --- a/drivers/ata/Makefile
 +++ b/drivers/ata/Makefile
 @@ -9,6 +9,7 @@ obj-$(CONFIG_SATA_FSL)		+= sata_fsl.o
@@ -43,8 +43,8 @@ index af45eff..b9996e6 100644
  obj-$(CONFIG_SATA_DWC)		+= sata_dwc_460ex.o
 +obj-$(CONFIG_SATA_DWC_PMP)	+= sata_dwc_pmp.o
  obj-$(CONFIG_SATA_HIGHBANK)	+= sata_highbank.o libahci.o
- obj-$(CONFIG_AHCI_BRCMSTB)	+= ahci_brcmstb.o libahci.o libahci_platform.o
- obj-$(CONFIG_AHCI_CEVA)		+= ahci_ceva.o libahci.o libahci_platform.o
+ obj-$(CONFIG_AHCI_DA850)	+= ahci_da850.o libahci.o libahci_platform.o
+ obj-$(CONFIG_AHCI_IMX)		+= ahci_imx.o libahci.o libahci_platform.o
 -- 
 2.1.4
 
