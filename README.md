@@ -3,13 +3,17 @@
 WD My Book Live Kernel 4.0 (now applies on 4.1.y) patches
 
 This patch set support WD My Book Live (not Duo), mostly are sata dirve and configuration ported from stock firmware 2.6.32 kernel.
-A little bit more information can be found on: http://kl-yang.blogspot.sg 
 This patch and config example allow to run Debian Jessie on MyBook Live as headless server.
 
 Debian Jessie rootfs with kernel 4.1.17 (sshd enabled) can be found here (kernel compiled natively on MBL, and rootfs use debootstrap):
 
 https://drive.google.com/file/d/0B-PZDFHXqH6pcFowcVJESGtsVGs/view?usp=sharing
 MD5sum:38fdb6931da035d0b9b0b8024d9a9a87
+
+Latest kernel 4.1.36 (16K pagesize, apply on top of the above rootfs)
+
+https://drive.google.com/file/d/0B-PZDFHXqH6pazNPZEJ2VEZuZEU/view?usp=sharing
+MD5sum:d4642aa2db7d21bc8f2e6e4701e26fab
 
 The package must be unpaced to the first partition (ext2) of MBL, and is tested on the single drive nas.
 Find the DHCP after boot, then ssh login as root and password is password.
