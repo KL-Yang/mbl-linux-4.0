@@ -1,14 +1,14 @@
-From ce31deea020a5dbe46df234a37946262a8873062 Mon Sep 17 00:00:00 2001
+From e64675fc295a80574c37c2a8d40b332d129dc27d Mon Sep 17 00:00:00 2001
 From: YangKunlun <yangkunlun@gmail.com>
-Date: Tue, 12 Jul 2016 12:15:41 +0000
-Subject: [PATCH 4/4] Fix emac NAPI buget exhuast
+Date: Sat, 22 Jul 2017 21:53:37 +0800
+Subject: [PATCH 4/4] fix budget exhaust after NAPI reschudle
 
 ---
  drivers/net/ethernet/ibm/emac/mal.c | 36 ++++++++++++++++++------------------
  1 file changed, 18 insertions(+), 18 deletions(-)
 
 diff --git a/drivers/net/ethernet/ibm/emac/mal.c b/drivers/net/ethernet/ibm/emac/mal.c
-index fdb5cdb..3fe7778 100644
+index aaf6fec..bbf60ca 100644
 --- a/drivers/net/ethernet/ibm/emac/mal.c
 +++ b/drivers/net/ethernet/ibm/emac/mal.c
 @@ -437,24 +437,24 @@ static int mal_poll(struct napi_struct *napi, int budget)

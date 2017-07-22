@@ -1,7 +1,7 @@
-From b41c2e5bf2f9fbb1b2a022daf8196d786cf48f14 Mon Sep 17 00:00:00 2001
+From e4760e992640f53ffa9d0050c596cf337e98ca4b Mon Sep 17 00:00:00 2001
 From: YangKunlun <yangkunlun@gmail.com>
-Date: Fri, 10 Jun 2016 21:34:19 +0800
-Subject: [PATCH 3/3] Enables sata driver
+Date: Sat, 22 Jul 2017 21:52:48 +0800
+Subject: [PATCH 3/4] 02-Enable sata driver
 
 ---
  drivers/ata/Kconfig  | 12 +++++++++++-
@@ -9,12 +9,12 @@ Subject: [PATCH 3/3] Enables sata driver
  2 files changed, 12 insertions(+), 1 deletion(-)
 
 diff --git a/drivers/ata/Kconfig b/drivers/ata/Kconfig
-index 9dca4b9..e9da9cc 100644
+index 2c8be74..0888f80 100644
 --- a/drivers/ata/Kconfig
 +++ b/drivers/ata/Kconfig
-@@ -277,9 +277,19 @@ config SATA_DWC
- 
- 	  If unsure, say N.
+@@ -330,9 +330,19 @@ config SATA_DWC_OLD_DMA
+ 	  This option enables support for old device trees without the
+ 	  "dmas" property.
  
 +config SATA_DWC_PMP
 +	tristate "DesignWare Cores SATA with PMP support"
@@ -34,17 +34,17 @@ index 9dca4b9..e9da9cc 100644
  	  This option enables debugging output in the driver.
  
 diff --git a/drivers/ata/Makefile b/drivers/ata/Makefile
-index 40f7865..ee86a9d 100644
+index a46e6b7..5d6c5ed 100644
 --- a/drivers/ata/Makefile
 +++ b/drivers/ata/Makefile
-@@ -9,6 +9,7 @@ obj-$(CONFIG_SATA_FSL)		+= sata_fsl.o
+@@ -10,6 +10,7 @@ obj-$(CONFIG_SATA_FSL)		+= sata_fsl.o
  obj-$(CONFIG_SATA_INIC162X)	+= sata_inic162x.o
  obj-$(CONFIG_SATA_SIL24)	+= sata_sil24.o
  obj-$(CONFIG_SATA_DWC)		+= sata_dwc_460ex.o
 +obj-$(CONFIG_SATA_DWC_PMP)	+= sata_dwc_pmp.o
  obj-$(CONFIG_SATA_HIGHBANK)	+= sata_highbank.o libahci.o
- obj-$(CONFIG_AHCI_DA850)	+= ahci_da850.o libahci.o libahci_platform.o
- obj-$(CONFIG_AHCI_IMX)		+= ahci_imx.o libahci.o libahci_platform.o
+ obj-$(CONFIG_AHCI_BRCM)		+= ahci_brcm.o libahci.o libahci_platform.o
+ obj-$(CONFIG_AHCI_CEVA)		+= ahci_ceva.o libahci.o libahci_platform.o
 -- 
 2.1.4
 

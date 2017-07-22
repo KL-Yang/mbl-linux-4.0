@@ -1,7 +1,7 @@
-From 6e2fa387876f0fce220c255c217d8c65f9c82a4a Mon Sep 17 00:00:00 2001
+From 0975bb930efe22b835cc2241eacef2522b528f95 Mon Sep 17 00:00:00 2001
 From: YangKunlun <yangkunlun@gmail.com>
-Date: Fri, 10 Jun 2016 21:33:44 +0800
-Subject: [PATCH 2/3] Enable MBL platform
+Date: Sat, 22 Jul 2017 21:52:10 +0800
+Subject: [PATCH 2/4] 01-Add basic board support
 
 ---
  arch/powerpc/platforms/44x/Kconfig         | 11 +++++++++++
@@ -9,7 +9,7 @@ Subject: [PATCH 2/3] Enable MBL platform
  2 files changed, 12 insertions(+)
 
 diff --git a/arch/powerpc/platforms/44x/Kconfig b/arch/powerpc/platforms/44x/Kconfig
-index 5538e57..36f0357 100644
+index 48fc180..c01c23d 100644
 --- a/arch/powerpc/platforms/44x/Kconfig
 +++ b/arch/powerpc/platforms/44x/Kconfig
 @@ -30,6 +30,17 @@ config BLUESTONE
@@ -31,7 +31,7 @@ index 5538e57..36f0357 100644
  	bool "Ebony"
  	depends on 44x
 diff --git a/arch/powerpc/platforms/44x/ppc44x_simple.c b/arch/powerpc/platforms/44x/ppc44x_simple.c
-index 573c3d2..c4f2643 100644
+index 8d6e4da..ed57cfb 100644
 --- a/arch/powerpc/platforms/44x/ppc44x_simple.c
 +++ b/arch/powerpc/platforms/44x/ppc44x_simple.c
 @@ -53,6 +53,7 @@ static char *board[] __initdata = {

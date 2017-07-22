@@ -454,7 +454,7 @@ static const char *dir_2_txt(enum dma_data_direction dir)
 	}
 }
 
-static const char *prot_2_txt(enum ata_tf_protocols protocol)
+static const char *prot_2_txt(u8 protocol)
 {
 	switch (protocol) {
 	case ATA_PROT_UNKNOWN:
