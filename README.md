@@ -24,6 +24,7 @@ The package must be unpaced to the first partition (sda1, and ext2 format) of MB
 Find the DHCP after boot, then ssh login as root and password is password.
 
 Some disccussion can be found on WD's forum:
+
 https://community.wd.com/t/any-interests-in-kernel-4-0-on-my-book-live/60483
 
 BACKUP EVERYTHING BEFORE DOING ANY OF THIS and TAKE YOUR OWN RISK USING IT:
