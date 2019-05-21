@@ -6,7 +6,7 @@ This patch and example kernel configuration support WD My Book Live (not Duo), t
 Now all the patches are from OpenWRT, so all the thanks to their great work.
 Debian has stopped powerpc release after Jessie, but the powerpc port is still maintained.
 
-Debian popwerpc port rootfs with kernel 4.9.44 (sshd enabled) can be found here (kernel compiled natively on MBL, 
+Debian popwerpc port rootfs with kernel 4.19.44 (sshd enabled) can be found here (kernel compiled natively on MBL, 
 and rootfs use debootstrap):
 
 https://drive.google.com/open?id=1pJNQd6xacCGBOfPgc9ye-SehU7ekgmfU
