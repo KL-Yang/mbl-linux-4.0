@@ -10,14 +10,15 @@ Debian popwerpc port rootfs with kernel 4.9.44 (sshd enabled) can be found here 
 and rootfs use debootstrap):
 
 https://drive.google.com/open?id=1pJNQd6xacCGBOfPgc9ye-SehU7ekgmfU
+
 MD5sum: 630420a54724a0b30bb566b4b24755fb
 
-# If you want debootstrap a clean Debian by yourself
+# If you want debootstrap a clean Debian
 
 Be careful to check this bug report:
 https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=927255
 
-#Installation notes
+# Installation notes
 
 The package must be unpaced to the first partition (sda1, and ext2 format) of MBL, and is tested on the single drive nas.
 Find the DHCP after boot, then ssh login as root and password is password.
