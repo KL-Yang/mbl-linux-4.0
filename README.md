@@ -1,31 +1,36 @@
 # mbl-linux-4.0
 
-WD My Book Live Kernel 4.0 (now applies on 4.1.y) patches
+WD My Book Live Kernel 4.0 (now applies on 4.19.y) patches
 
-This patch set support WD My Book Live (not Duo), mostly are sata dirve and configuration ported from stock firmware 2.6.32 kernel.
-This patch and config example allow to run Debian Jessie on MyBook Live as headless server.
+This patch and example kernel configuration support WD My Book Live (not Duo), the old drivers have been droped.
+Now all the patches are from OpenWRT, so all the thanks to their great work.
+Debian has stopped powerpc release after Jessie, but the powerpc port is still maintained.
 
-Debian Jessie rootfs with kernel 4.1.17 (sshd enabled) can be found here (kernel compiled natively on MBL, and rootfs use debootstrap):
+Debian popwerpc port rootfs with kernel 4.9.44 (sshd enabled) can be found here (kernel compiled natively on MBL, 
+and rootfs use debootstrap):
 
-https://drive.google.com/file/d/0B-PZDFHXqH6pcFowcVJESGtsVGs/view?usp=sharing
-MD5sum:38fdb6931da035d0b9b0b8024d9a9a87
+https://drive.google.com/open?id=1pJNQd6xacCGBOfPgc9ye-SehU7ekgmfU
+MD5sum: 630420a54724a0b30bb566b4b24755fb
 
-Latest kernel 4.1.36 (16K pagesize, apply on top of the above rootfs)
+# If you want debootstrap a clean Debian by yourself
 
-https://drive.google.com/file/d/0B-PZDFHXqH6pazNPZEJ2VEZuZEU/view?usp=sharing
-MD5sum:d4642aa2db7d21bc8f2e6e4701e26fab
+Be careful to check this bug report:
+https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=927255
 
-The package must be unpaced to the first partition (ext2) of MBL, and is tested on the single drive nas.
+#Installation notes
+
+The package must be unpaced to the first partition (sda1, and ext2 format) of MBL, and is tested on the single drive nas.
 Find the DHCP after boot, then ssh login as root and password is password.
 
 Some disccussion can be found on WD's forum:
 https://community.wd.com/t/any-interests-in-kernel-4-0-on-my-book-live/60483
 
-Note (BACKUP EVERYTHING BEFORE DOING ANY OF THIS and TAKE YOUR OWN RISK USING IT):
+BACKUP EVERYTHING BEFORE DOING ANY OF THIS and TAKE YOUR OWN RISK USING IT:
 
-The rootfs will NOT work on stock filesystem! The stock kernel use 64K page size (filesystem is also 64K page), 
-My kernel use 16K page size (4K performance is bad), and only tested with filesystem of 4K page size (default on x86/64).
+The rootfs will NOT work on stock filesystem! The stock kernel use 64K page size 
+(filesystem is also 64K page size, which performs better but makes data recovery harder).
+The compiled kernel here use 4K page (compatible with x86 PC if you swap the HDD and insert on PC).
 If none of them make any sense to you, just disassemble MBL to get the harddrive and connect to your PC's sata port (important, not USB!),
-repartition the drive, and unpack rootfs to the first partition (must be formated as ext2).
-Then put harddrive back into MBL, it should boot up as a Debian Jessie headless server.
-There is risk that it DOES NOT boot at all!
+repartition the drive, and unpack rootfs to the first partition (sda1, must be formated as ext2).
+Then put harddrive back into MBL, it should boot up as a Debian headless server.
+Regenerate your SSH keys after installation! There is risk that it DOES NOT boot at all!

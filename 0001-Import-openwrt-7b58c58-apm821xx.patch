@@ -1,0 +1,1152 @@
+From ec940076f372b75fb9bf8d3e2cad534cb9410f73 Mon Sep 17 00:00:00 2001
+From: yangkunlun <yangkunlun@gmail.com>
+Date: Sun, 19 May 2019 00:07:47 +0800
+Subject: [PATCH] Import openwrt-7b58c58 apm821xx
+
+---
+ arch/powerpc/platforms/44x/Kconfig         |  11 +
+ arch/powerpc/platforms/44x/ppc44x_simple.c |   1 +
+ arch/powerpc/platforms/4xx/pci.c           |  36 +-
+ drivers/dma/dw/core.c                      |   2 +
+ drivers/dma/dw/platform.c                  |   6 +
+ drivers/dma/dw/regs.h                      |   4 +
+ drivers/gpio/gpiolib-of.c                  |  71 +++
+ drivers/gpio/gpiolib-sysfs.c               |  10 +-
+ drivers/hwmon/tc654.c                      | 132 +++++-
+ drivers/usb/host/xhci-pci.c                | 481 +++++++++++++++++++++
+ drivers/usb/host/xhci.c                    |  10 +-
+ drivers/usb/host/xhci.h                    |   1 +
+ include/asm-generic/gpio.h                 |   6 +
+ include/dt-bindings/dma/dw-dmac.h          |  14 +
+ include/linux/gpio/consumer.h              |   8 +
+ include/linux/platform_data/dma-dw.h       |   6 +
+ 16 files changed, 766 insertions(+), 33 deletions(-)
+ create mode 100644 include/dt-bindings/dma/dw-dmac.h
+
+diff --git a/arch/powerpc/platforms/44x/Kconfig b/arch/powerpc/platforms/44x/Kconfig
+index a6011422b..0e8e08981 100644
+--- a/arch/powerpc/platforms/44x/Kconfig
++++ b/arch/powerpc/platforms/44x/Kconfig
+@@ -131,6 +131,17 @@ config CANYONLANDS
+ 	help
+ 	  This option enables support for the AMCC PPC460EX evaluation board.
+ 
++config APOLLO3G
++	bool "Apollo3G"
++	depends on 44x
++	default n
++	select PPC44x_SIMPLE
++	select APM821xx
++	select IBM_EMAC_RGMII
++	select 460EX
++	help
++	  This option enables support for the AMCC Apollo 3G board.
++
+ config GLACIER
+ 	bool "Glacier"
+ 	depends on 44x
+diff --git a/arch/powerpc/platforms/44x/ppc44x_simple.c b/arch/powerpc/platforms/44x/ppc44x_simple.c
+index 8d6e4da9d..7a124f7e1 100644
+--- a/arch/powerpc/platforms/44x/ppc44x_simple.c
++++ b/arch/powerpc/platforms/44x/ppc44x_simple.c
+@@ -50,6 +50,7 @@ machine_device_initcall(ppc44x_simple, ppc44x_device_probe);
+  * board.c file for it rather than adding it to this list.
+  */
+ static char *board[] __initdata = {
++	"amcc,apollo3g",
+ 	"amcc,arches",
+ 	"amcc,bamboo",
+ 	"apm,bluestone",
+diff --git a/arch/powerpc/platforms/4xx/pci.c b/arch/powerpc/platforms/4xx/pci.c
+index 5aca52355..adba4352d 100644
+--- a/arch/powerpc/platforms/4xx/pci.c
++++ b/arch/powerpc/platforms/4xx/pci.c
+@@ -1060,15 +1060,24 @@ static int __init apm821xx_pciex_init_port_hw(struct ppc4xx_pciex_port *port)
+ 	u32 val;
+ 
+ 	/*
+-	 * Do a software reset on PCIe ports.
+-	 * This code is to fix the issue that pci drivers doesn't re-assign
+-	 * bus number for PCIE devices after Uboot
+-	 * scanned and configured all the buses (eg. PCIE NIC IntelPro/1000
+-	 * PT quad port, SAS LSI 1064E)
++	 * Only reset the PHY when no link is currently established.
++	 * This is for the Atheros PCIe board which has problems to establish
++	 * the link (again) after this PHY reset. All other currently tested
++	 * PCIe boards don't show this problem.
+ 	 */
++	val = mfdcri(SDR0, port->sdr_base + PESDRn_LOOP);
++	if (!(val & 0x00001000)) {
++		/*
++		 * Do a software reset on PCIe ports.
++		 * This code is to fix the issue that pci drivers doesn't re-assign
++		 * bus number for PCIE devices after Uboot
++		 * scanned and configured all the buses (eg. PCIE NIC IntelPro/1000
++		 * PT quad port, SAS LSI 1064E)
++		 */
+ 
+-	mtdcri(SDR0, PESDR0_460EX_PHY_CTL_RST, 0x0);
+-	mdelay(10);
++		mtdcri(SDR0, PESDR0_460EX_PHY_CTL_RST, 0x0);
++		mdelay(10);
++	}
+ 
+ 	if (port->endpoint)
+ 		val = PTYPE_LEGACY_ENDPOINT << 20;
+@@ -1085,9 +1094,12 @@ static int __init apm821xx_pciex_init_port_hw(struct ppc4xx_pciex_port *port)
+ 	mtdcri(SDR0, PESDR0_460EX_L0DRV, 0x00000130);
+ 	mtdcri(SDR0, PESDR0_460EX_L0CLK, 0x00000006);
+ 
+-	mtdcri(SDR0, PESDR0_460EX_PHY_CTL_RST, 0x10000000);
+-	mdelay(50);
+-	mtdcri(SDR0, PESDR0_460EX_PHY_CTL_RST, 0x30000000);
++	val = mfdcri(SDR0, port->sdr_base + PESDRn_LOOP);
++	if (!(val & 0x00001000)) {
++		mtdcri(SDR0, PESDR0_460EX_PHY_CTL_RST, 0x10000000);
++		mdelay(50);
++		mtdcri(SDR0, PESDR0_460EX_PHY_CTL_RST, 0x30000000);
++	}
+ 
+ 	mtdcri(SDR0, port->sdr_base + PESDRn_RCSSET,
+ 		mfdcri(SDR0, port->sdr_base + PESDRn_RCSSET) |
+@@ -1893,9 +1905,9 @@ static void __init ppc4xx_configure_pciex_PIMs(struct ppc4xx_pciex_port *port,
+ 		 * if it works
+ 		 */
+ 		out_le32(mbase + PECFG_PIM0LAL, 0x00000000);
+-		out_le32(mbase + PECFG_PIM0LAH, 0x00000000);
++		out_le32(mbase + PECFG_PIM0LAH, 0x00000008);
+ 		out_le32(mbase + PECFG_PIM1LAL, 0x00000000);
+-		out_le32(mbase + PECFG_PIM1LAH, 0x00000000);
++		out_le32(mbase + PECFG_PIM1LAH, 0x0000000c);
+ 		out_le32(mbase + PECFG_PIM01SAH, 0xffff0000);
+ 		out_le32(mbase + PECFG_PIM01SAL, 0x00000000);
+ 
+diff --git a/drivers/dma/dw/core.c b/drivers/dma/dw/core.c
+index 0f389e008..055d83b6c 100644
+--- a/drivers/dma/dw/core.c
++++ b/drivers/dma/dw/core.c
+@@ -160,12 +160,14 @@ static void dwc_initialize_chan_idma32(struct dw_dma_chan *dwc)
+ 
+ static void dwc_initialize_chan_dw(struct dw_dma_chan *dwc)
+ {
++	struct dw_dma *dw = to_dw_dma(dwc->chan.device);
+ 	u32 cfghi = DWC_CFGH_FIFO_MODE;
+ 	u32 cfglo = DWC_CFGL_CH_PRIOR(dwc->priority);
+ 	bool hs_polarity = dwc->dws.hs_polarity;
+ 
+ 	cfghi |= DWC_CFGH_DST_PER(dwc->dws.dst_id);
+ 	cfghi |= DWC_CFGH_SRC_PER(dwc->dws.src_id);
++	cfghi |= DWC_CFGH_PROTCTL(dw->pdata->protctl);
+ 
+ 	/* Set polarity of handshake interface */
+ 	cfglo |= hs_polarity ? DWC_CFGL_HS_DST_POL | DWC_CFGL_HS_SRC_POL : 0;
+diff --git a/drivers/dma/dw/platform.c b/drivers/dma/dw/platform.c
+index f62dd0944..c299ff181 100644
+--- a/drivers/dma/dw/platform.c
++++ b/drivers/dma/dw/platform.c
+@@ -162,6 +162,12 @@ dw_dma_parse_dt(struct platform_device *pdev)
+ 			pdata->multi_block[tmp] = 1;
+ 	}
+ 
++	if (!of_property_read_u32(np, "snps,dma-protection-control", &tmp)) {
++		if (tmp > CHAN_PROTCTL_MASK)
++			return NULL;
++		pdata->protctl = tmp;
++	}
++
+ 	return pdata;
+ }
+ #else
+diff --git a/drivers/dma/dw/regs.h b/drivers/dma/dw/regs.h
+index 09e7dfdbb..646c9c960 100644
+--- a/drivers/dma/dw/regs.h
++++ b/drivers/dma/dw/regs.h
+@@ -200,6 +200,10 @@ enum dw_dma_msize {
+ #define DWC_CFGH_FCMODE		(1 << 0)
+ #define DWC_CFGH_FIFO_MODE	(1 << 1)
+ #define DWC_CFGH_PROTCTL(x)	((x) << 2)
++#define DWC_CFGH_PROTCTL_DATA	(0 << 2)	/* data access - always set */
++#define DWC_CFGH_PROTCTL_PRIV	(1 << 2)	/* privileged -> AHB HPROT[1] */
++#define DWC_CFGH_PROTCTL_BUFFER	(2 << 2)	/* bufferable -> AHB HPROT[2] */
++#define DWC_CFGH_PROTCTL_CACHE	(4 << 2)	/* cacheable  -> AHB HPROT[3] */
+ #define DWC_CFGH_DS_UPD_EN	(1 << 5)
+ #define DWC_CFGH_SS_UPD_EN	(1 << 6)
+ #define DWC_CFGH_SRC_PER(x)	((x) << 7)
+diff --git a/drivers/gpio/gpiolib-of.c b/drivers/gpio/gpiolib-of.c
+index e0f149bdf..0d1068dd4 100644
+--- a/drivers/gpio/gpiolib-of.c
++++ b/drivers/gpio/gpiolib-of.c
+@@ -23,6 +23,8 @@
+ #include <linux/pinctrl/pinctrl.h>
+ #include <linux/slab.h>
+ #include <linux/gpio/machine.h>
++#include <linux/init.h>
++#include <linux/platform_device.h>
+ 
+ #include "gpiolib.h"
+ 
+@@ -660,3 +662,72 @@ void of_gpiochip_remove(struct gpio_chip *chip)
+ 	gpiochip_remove_pin_ranges(chip);
+ 	of_node_put(chip->of_node);
+ }
++
++#ifdef CONFIG_GPIO_SYSFS
++
++static struct of_device_id gpio_export_ids[] = {
++	{ .compatible = "gpio-export" },
++	{ /* sentinel */ }
++};
++
++static int of_gpio_export_probe(struct platform_device *pdev)
++{
++	struct device_node *np = pdev->dev.of_node;
++	struct device_node *cnp;
++	u32 val;
++	int nb = 0;
++
++	for_each_child_of_node(np, cnp) {
++		const char *name = NULL;
++		int gpio;
++		bool dmc;
++		int max_gpio = 1;
++		int i;
++
++		of_property_read_string(cnp, "gpio-export,name", &name);
++
++		if (!name)
++			max_gpio = of_gpio_count(cnp);
++
++		for (i = 0; i < max_gpio; i++) {
++			unsigned flags = 0;
++			enum of_gpio_flags of_flags;
++
++			gpio = of_get_gpio_flags(cnp, i, &of_flags);
++			if (!gpio_is_valid(gpio))
++				return gpio;
++
++			if (of_flags == OF_GPIO_ACTIVE_LOW)
++				flags |= GPIOF_ACTIVE_LOW;
++
++			if (!of_property_read_u32(cnp, "gpio-export,output", &val))
++				flags |= val ? GPIOF_OUT_INIT_HIGH : GPIOF_OUT_INIT_LOW;
++			else
++				flags |= GPIOF_IN;
++
++			if (devm_gpio_request_one(&pdev->dev, gpio, flags, name ? name : of_node_full_name(np)))
++				continue;
++
++			dmc = of_property_read_bool(cnp, "gpio-export,direction_may_change");
++			gpio_export_with_name(gpio, dmc, name);
++			nb++;
++		}
++	}
++
++	dev_info(&pdev->dev, "%d gpio(s) exported\n", nb);
++
++	return 0;
++}
++
++static struct platform_driver gpio_export_driver = {
++	.driver		= {
++		.name		= "gpio-export",
++		.owner	= THIS_MODULE,
++		.of_match_table	= of_match_ptr(gpio_export_ids),
++	},
++	.probe		= of_gpio_export_probe,
++};
++
++module_platform_driver(gpio_export_driver);
++
++#endif
+diff --git a/drivers/gpio/gpiolib-sysfs.c b/drivers/gpio/gpiolib-sysfs.c
+index 3dbaf489a..23ac08406 100644
+--- a/drivers/gpio/gpiolib-sysfs.c
++++ b/drivers/gpio/gpiolib-sysfs.c
+@@ -568,7 +568,7 @@ static struct class gpio_class = {
+  *
+  * Returns zero on success, else an error.
+  */
+-int gpiod_export(struct gpio_desc *desc, bool direction_may_change)
++int __gpiod_export(struct gpio_desc *desc, bool direction_may_change, const char *name)
+ {
+ 	struct gpio_chip	*chip;
+ 	struct gpio_device	*gdev;
+@@ -630,6 +630,8 @@ int gpiod_export(struct gpio_desc *desc, bool direction_may_change)
+ 	offset = gpio_chip_hwgpio(desc);
+ 	if (chip->names && chip->names[offset])
+ 		ioname = chip->names[offset];
++	if (name)
++		ioname = name;
+ 
+ 	dev = device_create_with_groups(&gpio_class, &gdev->dev,
+ 					MKDEV(0, 0), data, gpio_groups,
+@@ -651,6 +653,12 @@ int gpiod_export(struct gpio_desc *desc, bool direction_may_change)
+ 	gpiod_dbg(desc, "%s: status %d\n", __func__, status);
+ 	return status;
+ }
++EXPORT_SYMBOL_GPL(__gpiod_export);
++
++int gpiod_export(struct gpio_desc *desc, bool direction_may_change)
++{
++	return __gpiod_export(desc, direction_may_change, NULL);
++}
+ EXPORT_SYMBOL_GPL(gpiod_export);
+ 
+ static int match_export(struct device *dev, const void *desc)
+diff --git a/drivers/hwmon/tc654.c b/drivers/hwmon/tc654.c
+index 18136e1f9..efd96dce8 100644
+--- a/drivers/hwmon/tc654.c
++++ b/drivers/hwmon/tc654.c
+@@ -24,6 +24,7 @@
+ #include <linux/module.h>
+ #include <linux/mutex.h>
+ #include <linux/slab.h>
++#include <linux/thermal.h>
+ #include <linux/util_macros.h>
+ 
+ enum tc654_regs {
+@@ -64,6 +65,11 @@ enum tc654_regs {
+ /* Register data is read (and cached) at most once per second. */
+ #define TC654_UPDATE_INTERVAL		HZ
+ 
++/* Manufacturer and Version Identification Register Values */
++#define TC654_MFR_ID_MICROCHIP		0x84
++#define TC654_VER_ID			0x00
++#define TC655_VER_ID			0x01
++
+ struct tc654_data {
+ 	struct i2c_client *client;
+ 
+@@ -136,6 +142,9 @@ struct tc654_data {
+ 			 * writable register used to control the duty
+ 			 * cycle of the V OUT output.
+ 			 */
++
++	/* optional cooling device */
++	struct thermal_cooling_device *cdev;
+ };
+ 
+ /* helper to grab and cache data, at most one time per second */
+@@ -371,36 +380,30 @@ static ssize_t set_pwm_mode(struct device *dev,
+ static const int tc654_pwm_map[16] = { 77,  88, 102, 112, 124, 136, 148, 160,
+ 				      172, 184, 196, 207, 219, 231, 243, 255};
+ 
++static int get_pwm(struct tc654_data *data)
++{
++	if (data->config & TC654_REG_CONFIG_SDM)
++		return 0;
++	else
++		return tc654_pwm_map[data->duty_cycle];
++}
++
+ static ssize_t show_pwm(struct device *dev, struct device_attribute *da,
+ 			char *buf)
+ {
+ 	struct tc654_data *data = tc654_update_client(dev);
+-	int pwm;
+ 
+ 	if (IS_ERR(data))
+ 		return PTR_ERR(data);
+ 
+-	if (data->config & TC654_REG_CONFIG_SDM)
+-		pwm = 0;
+-	else
+-		pwm = tc654_pwm_map[data->duty_cycle];
+-
+-	return sprintf(buf, "%d\n", pwm);
++	return sprintf(buf, "%d\n", get_pwm(data));
+ }
+ 
+-static ssize_t set_pwm(struct device *dev, struct device_attribute *da,
+-		       const char *buf, size_t count)
++static int _set_pwm(struct tc654_data *data, unsigned long val)
+ {
+-	struct tc654_data *data = dev_get_drvdata(dev);
+ 	struct i2c_client *client = data->client;
+-	unsigned long val;
+ 	int ret;
+ 
+-	if (kstrtoul(buf, 10, &val))
+-		return -EINVAL;
+-	if (val > 255)
+-		return -EINVAL;
+-
+ 	mutex_lock(&data->update_lock);
+ 
+ 	if (val == 0)
+@@ -420,6 +423,22 @@ static ssize_t set_pwm(struct device *dev, struct device_attribute *da,
+ 
+ out:
+ 	mutex_unlock(&data->update_lock);
++	return ret;
++}
++
++static ssize_t set_pwm(struct device *dev, struct device_attribute *da,
++		       const char *buf, size_t count)
++{
++	struct tc654_data *data = dev_get_drvdata(dev);
++	unsigned long val;
++	int ret;
++
++	if (kstrtoul(buf, 10, &val))
++		return -EINVAL;
++	if (val > 255)
++		return -EINVAL;
++
++	ret = _set_pwm(data, val);
+ 	return ret < 0 ? ret : count;
+ }
+ 
+@@ -457,6 +476,47 @@ static struct attribute *tc654_attrs[] = {
+ 
+ ATTRIBUTE_GROUPS(tc654);
+ 
++/* cooling device */
++
++static int tc654_get_max_state(struct thermal_cooling_device *cdev,
++			       unsigned long *state)
++{
++	*state = 255;
++	return 0;
++}
++
++static int tc654_get_cur_state(struct thermal_cooling_device *cdev,
++                              unsigned long *state)
++{
++	struct tc654_data *data = tc654_update_client(cdev->devdata);
++
++	if (IS_ERR(data))
++		return PTR_ERR(data);
++
++	*state = get_pwm(data);
++	return 0;
++}
++
++static int tc654_set_cur_state(struct thermal_cooling_device *cdev,
++			       unsigned long state)
++{
++	struct tc654_data *data = tc654_update_client(cdev->devdata);
++
++	if (IS_ERR(data))
++		return PTR_ERR(data);
++
++	if (state > 255)
++		return -EINVAL;
++
++	return _set_pwm(data, state);
++}
++
++static const struct thermal_cooling_device_ops tc654_fan_cool_ops = {
++	.get_max_state = tc654_get_max_state,
++	.get_cur_state = tc654_get_cur_state,
++	.set_cur_state = tc654_set_cur_state,
++};
++
+ /*
+  * device probe and removal
+  */
+@@ -488,7 +548,21 @@ static int tc654_probe(struct i2c_client *client,
+ 	hwmon_dev =
+ 	    devm_hwmon_device_register_with_groups(dev, client->name, data,
+ 						   tc654_groups);
+-	return PTR_ERR_OR_ZERO(hwmon_dev);
++	if (IS_ERR(hwmon_dev))
++		return PTR_ERR(hwmon_dev);
++
++#if IS_ENABLED(CONFIG_OF)
++	/* Optional cooling device register for Device tree platforms */
++	data->cdev = thermal_of_cooling_device_register(client->dev.of_node,
++							"tc654", hwmon_dev,
++							&tc654_fan_cool_ops);
++#else /* CONFIG_OF */
++	/* Optional cooling device register for non Device tree platforms */
++	data->cdev = thermal_cooling_device_register("tc654", hwmon_dev,
++						     &tc654_fan_cool_ops);
++#endif /* CONFIG_OF */
++
++	return PTR_ERR_OR_ZERO(data->cdev);
+ }
+ 
+ static const struct i2c_device_id tc654_id[] = {
+@@ -497,6 +571,29 @@ static const struct i2c_device_id tc654_id[] = {
+ 	{}
+ };
+ 
++static int
++tc654_detect(struct i2c_client *new_client, struct i2c_board_info *info)
++{
++	struct i2c_adapter *adapter = new_client->adapter;
++	int manufacturer, product;
++
++	if (!i2c_check_functionality(adapter, I2C_FUNC_SMBUS_BYTE_DATA))
++		return -ENODEV;
++
++	manufacturer = i2c_smbus_read_byte_data(new_client, TC654_REG_MFR_ID);
++	if (manufacturer != TC654_MFR_ID_MICROCHIP)
++		return -ENODEV;
++
++	product = i2c_smbus_read_byte_data(new_client, TC654_REG_VER_ID);
++	if (!((product == TC654_VER_ID) || (product == TC655_VER_ID)))
++		return -ENODEV;
++
++	strlcpy(info->type, product == TC654_VER_ID ? "tc654" : "tc655",
++		I2C_NAME_SIZE);
++	return 0;
++}
++
++
+ MODULE_DEVICE_TABLE(i2c, tc654_id);
+ 
+ static struct i2c_driver tc654_driver = {
+@@ -505,6 +602,7 @@ static struct i2c_driver tc654_driver = {
+ 		   },
+ 	.probe = tc654_probe,
+ 	.id_table = tc654_id,
++	.detect = tc654_detect,
+ };
+ 
+ module_i2c_driver(tc654_driver);
+diff --git a/drivers/usb/host/xhci-pci.c b/drivers/usb/host/xhci-pci.c
+index 1493d0fdf..b66f55ed9 100644
+--- a/drivers/usb/host/xhci-pci.c
++++ b/drivers/usb/host/xhci-pci.c
+@@ -12,6 +12,8 @@
+ #include <linux/slab.h>
+ #include <linux/module.h>
+ #include <linux/acpi.h>
++#include <linux/firmware.h>
++#include <asm/unaligned.h>
+ 
+ #include "xhci.h"
+ #include "xhci-trace.h"
+@@ -213,6 +215,7 @@ static void xhci_pci_quirks(struct device *dev, struct xhci_hcd *xhci)
+ 	    pdev->device == 0x0015) {
+ 		xhci->quirks |= XHCI_RESET_ON_RESUME;
+ 		xhci->quirks |= XHCI_ZERO_64B_REGS;
++		xhci->quirks |= XHCI_FORCE_MSI;
+ 	}
+ 	if (pdev->vendor == PCI_VENDOR_ID_VIA)
+ 		xhci->quirks |= XHCI_RESET_ON_RESUME;
+@@ -262,6 +265,458 @@ static void xhci_pme_acpi_rtd3_enable(struct pci_dev *dev)
+ static void xhci_pme_acpi_rtd3_enable(struct pci_dev *dev) { }
+ #endif /* CONFIG_ACPI */
+ 
++static const struct renesas_fw_entry {
++	const char *firmware_name;
++	u16 device;
++	u8 revision;
++	u16 expected_version;
++} renesas_fw_table[] = {
++	/*
++	 * Only the uPD720201K8-711-BAC-A or uPD720202K8-711-BAA-A
++	 * are listed in R19UH0078EJ0500 Rev.5.00 as devices which
++	 * need the software loader.
++	 *
++	 * PP2U/ReleaseNote_USB3-201-202-FW.txt:
++	 *
++	 * Note: This firmware is for the following devices.
++	 *  - uPD720201 ES 2.0 sample whose revision ID is 2.
++	 *  - uPD720201 ES 2.1 sample & CS sample & Mass product, ID is 3.
++	 *  - uPD720202 ES 2.0 sample & CS sample & Mass product, ID is 2.
++	 */
++	{ "K2013080.mem", 0x0014, 0x02, 0x2013 },
++	{ "K2013080.mem", 0x0014, 0x03, 0x2013 },
++	{ "K2013080.mem", 0x0015, 0x02, 0x2013 },
++};
++
++static const struct renesas_fw_entry *renesas_needs_fw_dl(struct pci_dev *dev)
++{
++	const struct renesas_fw_entry *entry;
++	size_t i;
++
++	/* This loader will only work with a RENESAS device. */
++	if (!(dev->vendor == PCI_VENDOR_ID_RENESAS))
++		return NULL;
++
++	for (i = 0; i < ARRAY_SIZE(renesas_fw_table); i++) {
++		entry = &renesas_fw_table[i];
++		if (entry->device == dev->device &&
++		    entry->revision == dev->revision)
++			return entry;
++	}
++
++	return NULL;
++}
++
++static int renesas_fw_download_image(struct pci_dev *dev,
++				     const u32 *fw,
++				     size_t step)
++{
++	size_t i;
++	int err;
++	u8 fw_status;
++	bool data0_or_data1;
++
++	/*
++	 * The hardware does alternate between two 32-bit pages.
++	 * (This is because each row of the firmware is 8 bytes).
++	 *
++	 * for even steps we use DATA0, for odd steps DATA1.
++	 */
++	data0_or_data1 = (step & 1) == 1;
++
++	/* step+1. Read "Set DATAX" and confirm it is cleared. */
++	for (i = 0; i < 10000; i++) {
++		err = pci_read_config_byte(dev, 0xF5, &fw_status);
++		if (err)
++			return pcibios_err_to_errno(err);
++		if (!(fw_status & BIT(data0_or_data1)))
++			break;
++
++		udelay(1);
++	}
++	if (i == 10000)
++		return -ETIMEDOUT;
++
++	/*
++	 * step+2. Write FW data to "DATAX".
++	 * "LSB is left" => force little endian
++	 */
++	err = pci_write_config_dword(dev, data0_or_data1 ? 0xFC : 0xF8,
++				     (__force u32) cpu_to_le32(fw[step]));
++	if (err)
++		return pcibios_err_to_errno(err);
++
++	udelay(100);
++
++	/* step+3. Set "Set DATAX". */
++	err = pci_write_config_byte(dev, 0xF5, BIT(data0_or_data1));
++	if (err)
++		return pcibios_err_to_errno(err);
++
++	return 0;
++}
++
++static int renesas_fw_verify(struct pci_dev *dev,
++			     const void *fw_data,
++			     size_t length)
++{
++	const struct renesas_fw_entry *entry = renesas_needs_fw_dl(dev);
++	u16 fw_version_pointer;
++	u16 fw_version;
++
++	if (!entry)
++		return -EINVAL;
++
++	/*
++	 * The Firmware's Data Format is describe in
++	 * "6.3 Data Format" R19UH0078EJ0500 Rev.5.00 page 124
++	 */
++
++	/* "Each row is 8 bytes". => firmware size must be a multiple of 8. */
++	if (length % 8 != 0) {
++		dev_err(&dev->dev, "firmware size is not a multipe of 8.");
++		return -EINVAL;
++	}
++
++	/*
++	 * The bootrom chips of the big brother have sizes up to 64k, let's
++	 * assume that's the biggest the firmware can get.
++	 */
++	if (length < 0x1000 || length >= 0x10000) {
++		dev_err(&dev->dev, "firmware is size %zd is not (4k - 64k).",
++			length);
++		return -EINVAL;
++	}
++
++	/* The First 2 bytes are fixed value (55aa). "LSB on Left" */
++	if (get_unaligned_le16(fw_data) != 0x55aa) {
++		dev_err(&dev->dev, "no valid firmware header found.");
++		return -EINVAL;
++	}
++
++	/* verify the firmware version position and print it. */
++	fw_version_pointer = get_unaligned_le16(fw_data + 4);
++	if (fw_version_pointer + 2 >= length) {
++		dev_err(&dev->dev, "firmware version pointer is outside of the firmware image.");
++		return -EINVAL;
++	}
++
++	fw_version = get_unaligned_le16(fw_data + fw_version_pointer);
++	dev_dbg(&dev->dev, "got firmware version: %02x.", fw_version);
++
++	if (fw_version != entry->expected_version) {
++		dev_err(&dev->dev, "firmware version mismatch, expected version: %02x.",
++			 entry->expected_version);
++		return -EINVAL;
++	}
++
++	return 0;
++}
++
++static int renesas_fw_check_running(struct pci_dev *pdev)
++{
++	int err;
++	u8 fw_state;
++
++	/*
++	 * Test if the device is actually needing the firmware. As most
++	 * BIOSes will initialize the device for us. If the device is
++	 * initialized.
++	 */
++	err = pci_read_config_byte(pdev, 0xF4, &fw_state);
++	if (err)
++		return pcibios_err_to_errno(err);
++
++	/*
++	 * Check if "FW Download Lock" is locked. If it is and the FW is
++	 * ready we can simply continue. If the FW is not ready, we have
++	 * to give up.
++	 */
++	if (fw_state & BIT(1)) {
++		dev_dbg(&pdev->dev, "FW Download Lock is engaged.");
++
++		if (fw_state & BIT(4))
++			return 0;
++
++		dev_err(&pdev->dev, "FW Download Lock is set and FW is not ready. Giving Up.");
++		return -EIO;
++	}
++
++	/*
++	 * Check if "FW Download Enable" is set. If someone (us?) tampered
++	 * with it and it can't be resetted, we have to give up too... and
++	 * ask for a forgiveness and a reboot.
++	 */
++	if (fw_state & BIT(0)) {
++		dev_err(&pdev->dev, "FW Download Enable is stale. Giving Up (poweroff/reboot needed).");
++		return -EIO;
++	}
++
++	/* Otherwise, Check the "Result Code" Bits (6:4) and act accordingly */
++	switch ((fw_state & 0x70)) {
++	case 0: /* No result yet */
++		dev_dbg(&pdev->dev, "FW is not ready/loaded yet.");
++
++		/* tell the caller, that this device needs the firmware. */
++		return 1;
++
++	case BIT(4): /* Success, device should be working. */
++		dev_dbg(&pdev->dev, "FW is ready.");
++		return 0;
++
++	case BIT(5): /* Error State */
++		dev_err(&pdev->dev, "hardware is in an error state. Giving up (poweroff/reboot needed).");
++		return -ENODEV;
++
++	default: /* All other states are marked as "Reserved states" */
++		dev_err(&pdev->dev, "hardware is in an invalid state %x. Giving up (poweroff/reboot needed).",
++			(fw_state & 0x70) >> 4);
++		return -EINVAL;
++	}
++}
++
++static int renesas_hw_check_run_stop_busy(struct pci_dev *pdev)
++{
++#if 0
++	u32 val;
++
++	/*
++	 * 7.1.3 Note 3: "... must not set 'FW Download Enable' when
++	 * 'RUN/STOP' of USBCMD Register is set"
++	 */
++	val = readl(hcd->regs + 0x20);
++	if (val & BIT(0)) {
++		dev_err(&pdev->dev, "hardware is busy and can't receive a FW.");
++		return -EBUSY;
++	}
++#endif
++	return 0;
++}
++
++static int renesas_fw_download(struct pci_dev *pdev,
++	const struct firmware *fw, unsigned int retry_counter)
++{
++	const u32 *fw_data = (const u32 *) fw->data;
++	size_t i;
++	int err;
++	u8 fw_status;
++
++	/*
++	 * For more information and the big picture: please look at the
++	 * "Firmware Download Sequence" in "7.1 FW Download Interface"
++	 * of R19UH0078EJ0500 Rev.5.00 page 131
++	 */
++	err = renesas_hw_check_run_stop_busy(pdev);
++	if (err)
++		return err;
++
++	/*
++	 * 0. Set "FW Download Enable" bit in the
++	 * "FW Download Control & Status Register" at 0xF4
++	 */
++	err = pci_write_config_byte(pdev, 0xF4, BIT(0));
++	if (err)
++		return pcibios_err_to_errno(err);
++
++	/* 1 - 10 follow one step after the other. */
++	for (i = 0; i < fw->size / 4; i++) {
++		err = renesas_fw_download_image(pdev, fw_data, i);
++		if (err) {
++			dev_err(&pdev->dev, "Firmware Download Step %zd failed at position %zd bytes with (%d).",
++				 i, i * 4, err);
++			return err;
++		}
++	}
++
++	/*
++	 * This sequence continues until the last data is written to
++	 * "DATA0" or "DATA1". Naturally, we wait until "SET DATA0/1"
++	 * is cleared by the hardware beforehand.
++	 */
++	for (i = 0; i < 10000; i++) {
++		err = pci_read_config_byte(pdev, 0xF5, &fw_status);
++		if (err)
++			return pcibios_err_to_errno(err);
++		if (!(fw_status & (BIT(0) | BIT(1))))
++			break;
++
++		udelay(1);
++	}
++	if (i == 10000)
++		dev_warn(&pdev->dev, "Final Firmware Download step timed out.");
++
++	/*
++	 * 11. After finishing writing the last data of FW, the
++	 * System Software must clear "FW Download Enable"
++	 */
++	err = pci_write_config_byte(pdev, 0xF4, 0);
++	if (err)
++		return pcibios_err_to_errno(err);
++
++	/* 12. Read "Result Code" and confirm it is good. */
++	for (i = 0; i < 10000; i++) {
++		err = pci_read_config_byte(pdev, 0xF4, &fw_status);
++		if (err)
++			return pcibios_err_to_errno(err);
++		if (fw_status & BIT(4))
++			break;
++
++		udelay(1);
++	}
++	if (i == 10000) {
++		/* Timed out / Error - let's see if we can fix this */
++		err = renesas_fw_check_running(pdev);
++		switch (err) {
++		case 0: /*
++			 * we shouldn't end up here.
++			 * maybe it took a little bit longer.
++			 * But all should be well?
++			 */
++			break;
++
++		case 1: /* (No result yet? - we can try to retry) */
++			if (retry_counter < 10) {
++				retry_counter++;
++				dev_warn(&pdev->dev, "Retry Firmware download: %d try.",
++					  retry_counter);
++				return renesas_fw_download(pdev, fw,
++							   retry_counter);
++			}
++			return -ETIMEDOUT;
++
++		default:
++			return err;
++		}
++	}
++	/*
++	 * Optional last step: Engage Firmware Lock
++	 *
++	 * err = pci_write_config_byte(pdev, 0xF4, BIT(2));
++	 * if (err)
++	 *	return pcibios_err_to_errno(err);
++	 */
++
++	return 0;
++}
++
++struct renesas_fw_ctx {
++	struct pci_dev *pdev;
++	const struct pci_device_id *id;
++	bool resume;
++};
++
++static int xhci_pci_probe(struct pci_dev *pdev,
++			  const struct pci_device_id *id);
++
++static void renesas_fw_callback(const struct firmware *fw,
++				void *context)
++{
++	struct renesas_fw_ctx *ctx = context;
++	struct pci_dev *pdev = ctx->pdev;
++	struct device *parent = pdev->dev.parent;
++	int err = -ENOENT;
++
++	if (fw) {
++		err = renesas_fw_verify(pdev, fw->data, fw->size);
++		if (!err) {
++			err = renesas_fw_download(pdev, fw, 0);
++			release_firmware(fw);
++			if (!err) {
++				if (ctx->resume)
++					return;
++
++				err = xhci_pci_probe(pdev, ctx->id);
++				if (!err) {
++					/* everything worked */
++					devm_kfree(&pdev->dev, ctx);
++					return;
++				}
++
++				/* in case of an error - fall through */
++			} else {
++				dev_err(&pdev->dev, "firmware failed to download (%d).",
++					err);
++			}
++		}
++	} else {
++		dev_err(&pdev->dev, "firmware failed to load (%d).", err);
++	}
++
++	dev_info(&pdev->dev, "Unloading driver");
++
++	if (parent)
++		device_lock(parent);
++
++	device_release_driver(&pdev->dev);
++
++	if (parent)
++		device_unlock(parent);
++
++	pci_dev_put(pdev);
++}
++
++static int renesas_fw_alive_check(struct pci_dev *pdev)
++{
++	const struct renesas_fw_entry *entry;
++	int err;
++
++	/* check if we have a eligible RENESAS' uPD720201/2 w/o FW. */
++	entry = renesas_needs_fw_dl(pdev);
++	if (!entry)
++		return 0;
++
++	err = renesas_fw_check_running(pdev);
++	/* Also go ahead, if the firmware is running */
++	if (err == 0)
++		return 0;
++
++	/* At this point, we can be sure that the FW isn't ready. */
++	return err;
++}
++
++static int renesas_fw_download_to_hw(struct pci_dev *pdev,
++				     const struct pci_device_id *id,
++				     bool do_resume)
++{
++	const struct renesas_fw_entry *entry;
++	struct renesas_fw_ctx *ctx;
++	int err;
++
++	/* check if we have a eligible RENESAS' uPD720201/2 w/o FW. */
++	entry = renesas_needs_fw_dl(pdev);
++	if (!entry)
++		return 0;
++
++	err = renesas_fw_check_running(pdev);
++	/* Continue ahead, if the firmware is already running. */
++	if (err == 0)
++		return 0;
++
++	if (err != 1)
++		return err;
++
++	ctx = devm_kzalloc(&pdev->dev, sizeof(*ctx), GFP_KERNEL);
++	if (!ctx)
++		return -ENOMEM;
++	ctx->pdev = pdev;
++	ctx->resume = do_resume;
++	ctx->id = id;
++
++	pci_dev_get(pdev);
++	err = request_firmware_nowait(THIS_MODULE, 1, entry->firmware_name,
++		&pdev->dev, GFP_KERNEL, ctx, renesas_fw_callback);
++	if (err) {
++		pci_dev_put(pdev);
++		return err;
++	}
++
++	/*
++	 * The renesas_fw_callback() callback will continue the probe
++	 * process, once it aquires the firmware.
++	 */
++	return 1;
++}
++
+ /* called during probe() after chip reset completes */
+ static int xhci_pci_setup(struct usb_hcd *hcd)
+ {
+@@ -300,6 +755,22 @@ static int xhci_pci_probe(struct pci_dev *dev, const struct pci_device_id *id)
+ 	struct hc_driver *driver;
+ 	struct usb_hcd *hcd;
+ 
++	/*
++	 * Check if this device is a RENESAS uPD720201/2 device.
++	 * Otherwise, we can continue with xhci_pci_probe as usual.
++	 */
++	retval = renesas_fw_download_to_hw(dev, id, false);
++	switch (retval) {
++	case 0:
++		break;
++
++	case 1: /* let it load the firmware and recontinue the probe. */
++		return 0;
++
++	default:
++		return retval;
++	}
++
+ 	driver = (struct hc_driver *)id->driver_data;
+ 
+ 	/* Prevent runtime suspending between USB-2 and USB-3 initialization */
+@@ -361,6 +832,16 @@ static void xhci_pci_remove(struct pci_dev *dev)
+ {
+ 	struct xhci_hcd *xhci;
+ 
++	if (renesas_fw_alive_check(dev)) {
++		/*
++		 * bail out early, if this was a renesas device w/o FW.
++		 * Else we might hit the NMI watchdog in xhci_handsake
++		 * during xhci_reset as part of the driver's unloading.
++		 * which we forced in the renesas_fw_callback().
++		 */
++		return;
++	}
++
+ 	xhci = hcd_to_xhci(pci_get_drvdata(dev));
+ 	xhci->xhc_state |= XHCI_STATE_REMOVING;
+ 	if (xhci->shared_hcd) {
+diff --git a/drivers/usb/host/xhci.c b/drivers/usb/host/xhci.c
+index dae3be1b9..577727f46 100644
+--- a/drivers/usb/host/xhci.c
++++ b/drivers/usb/host/xhci.c
+@@ -424,10 +424,14 @@ static int xhci_try_enable_msi(struct usb_hcd *hcd)
+ 		free_irq(hcd->irq, hcd);
+ 	hcd->irq = 0;
+ 
+-	ret = xhci_setup_msix(xhci);
+-	if (ret)
+-		/* fall back to msi*/
++	if (xhci->quirks & XHCI_FORCE_MSI) {
+ 		ret = xhci_setup_msi(xhci);
++	} else {
++		ret = xhci_setup_msix(xhci);
++		if (ret)
++			/* fall back to msi*/
++			ret = xhci_setup_msi(xhci);
++	}
+ 
+ 	if (!ret) {
+ 		hcd->msi_enabled = 1;
+diff --git a/drivers/usb/host/xhci.h b/drivers/usb/host/xhci.h
+index dc00f59c8..248badc62 100644
+--- a/drivers/usb/host/xhci.h
++++ b/drivers/usb/host/xhci.h
+@@ -1867,6 +1867,7 @@ struct xhci_hcd {
+ 	/* support xHCI 0.96 spec USB2 software LPM */
+ 	unsigned		sw_lpm_support:1;
+ 	/* support xHCI 1.0 spec USB2 hardware LPM */
++#define XHCI_FORCE_MSI		(1 << 24)
+ 	unsigned		hw_lpm_support:1;
+ 	/* Broken Suspend flag for SNPS Suspend resume issue */
+ 	unsigned		broken_suspend:1;
+diff --git a/include/asm-generic/gpio.h b/include/asm-generic/gpio.h
+index 19eadac41..bf0ac4d66 100644
+--- a/include/asm-generic/gpio.h
++++ b/include/asm-generic/gpio.h
+@@ -127,6 +127,12 @@ static inline int gpio_export(unsigned gpio, bool direction_may_change)
+ 	return gpiod_export(gpio_to_desc(gpio), direction_may_change);
+ }
+ 
++int __gpiod_export(struct gpio_desc *desc, bool direction_may_change, const char *name);
++static inline int gpio_export_with_name(unsigned gpio, bool direction_may_change, const char *name)
++{
++	return __gpiod_export(gpio_to_desc(gpio), direction_may_change, name);
++}
++
+ static inline int gpio_export_link(struct device *dev, const char *name,
+ 				   unsigned gpio)
+ {
+diff --git a/include/dt-bindings/dma/dw-dmac.h b/include/dt-bindings/dma/dw-dmac.h
+new file mode 100644
+index 000000000..d1ca705c9
+--- /dev/null
++++ b/include/dt-bindings/dma/dw-dmac.h
+@@ -0,0 +1,14 @@
++/* SPDX-License-Identifier: (GPL-2.0 OR MIT) */
++
++#ifndef __DT_BINDINGS_DMA_DW_DMAC_H__
++#define __DT_BINDINGS_DMA_DW_DMAC_H__
++
++/*
++ * Protection Control bits provide protection against illegal transactions.
++ * The protection bits[0:2] are one-to-one mapped to AHB HPROT[3:1] signals.
++ */
++#define DW_DMAC_HPROT1_PRIVILEGED_MODE	(1 << 0)	/* Privileged Mode */
++#define DW_DMAC_HPROT2_BUFFERABLE	(1 << 1)	/* DMA is bufferable */
++#define DW_DMAC_HPROT3_CACHEABLE	(1 << 2)	/* DMA is cacheable */
++
++#endif /* __DT_BINDINGS_DMA_DW_DMAC_H__ */
+diff --git a/include/linux/gpio/consumer.h b/include/linux/gpio/consumer.h
+index acc4279ad..d45fbb93e 100644
+--- a/include/linux/gpio/consumer.h
++++ b/include/linux/gpio/consumer.h
+@@ -533,6 +533,7 @@ struct gpio_desc *devm_fwnode_get_gpiod_from_child(struct device *dev,
+ 
+ #if IS_ENABLED(CONFIG_GPIOLIB) && IS_ENABLED(CONFIG_GPIO_SYSFS)
+ 
++int _gpiod_export(struct gpio_desc *desc, bool direction_may_change, const char *name);
+ int gpiod_export(struct gpio_desc *desc, bool direction_may_change);
+ int gpiod_export_link(struct device *dev, const char *name,
+ 		      struct gpio_desc *desc);
+@@ -540,6 +541,13 @@ void gpiod_unexport(struct gpio_desc *desc);
+ 
+ #else  /* CONFIG_GPIOLIB && CONFIG_GPIO_SYSFS */
+ 
++static inline int _gpiod_export(struct gpio_desc *desc,
++			       bool direction_may_change,
++			       const char *name)
++{
++	return -ENOSYS;
++}
++
+ static inline int gpiod_export(struct gpio_desc *desc,
+ 			       bool direction_may_change)
+ {
+diff --git a/include/linux/platform_data/dma-dw.h b/include/linux/platform_data/dma-dw.h
+index 896cb71a3..1a1d58ebf 100644
+--- a/include/linux/platform_data/dma-dw.h
++++ b/include/linux/platform_data/dma-dw.h
+@@ -49,6 +49,7 @@ struct dw_dma_slave {
+  * @data_width: Maximum data width supported by hardware per AHB master
+  *		(in bytes, power of 2)
+  * @multi_block: Multi block transfers supported by hardware per channel.
++ * @protctl: Protection control signals setting per channel.
+  */
+ struct dw_dma_platform_data {
+ 	unsigned int	nr_channels;
+@@ -65,6 +66,11 @@ struct dw_dma_platform_data {
+ 	unsigned char	nr_masters;
+ 	unsigned char	data_width[DW_DMA_MAX_NR_MASTERS];
+ 	unsigned char	multi_block[DW_DMA_MAX_NR_CHANNELS];
++#define CHAN_PROTCTL_PRIVILEGED		BIT(0)
++#define CHAN_PROTCTL_BUFFERABLE		BIT(1)
++#define CHAN_PROTCTL_CACHEABLE		BIT(2)
++#define CHAN_PROTCTL_MASK		GENMASK(2, 0)
++	unsigned char	protctl;
+ };
+ 
+ #endif /* _PLATFORM_DATA_DMA_DW_H */
+-- 
+2.20.1
+
